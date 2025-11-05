@@ -1,0 +1,16 @@
+*.aux
+*.log
+*.nav
+*.out
+*.snm
+*.toc
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.synctex.gz
+*.pdf
+
+*.pyc
+__pycache__/
+.DS_Store
