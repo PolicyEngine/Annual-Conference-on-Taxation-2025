@@ -36,6 +36,13 @@
 \begin{frame}{Motivation: Local Tax Policy Microsimulation}
 \begin{columns}
 \begin{column}{0.48\textwidth}
+\textbf{Goals:}
+\begin{itemize}
+    \item Simulate tax policy reforms at the local level
+    \item Enable estimation of tax-related quantities (e.g., totals)
+    \item Enable distributional analyses 
+\end{itemize}
+
 \textbf{Challenges:}
 \begin{itemize}
     \item Insufficient income data in the Current Population Survey (CPS)
@@ -52,6 +59,52 @@
 \end{center}
 \end{column}
 \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Reform Example: Doubling the Standard Deduction}
+\small
+\begin{verbatim}
+from policyengine_us import Microsimulation
+from policyengine_core.reforms import Reform
+
+double_standard_deduction = Reform.from_dict({
+    "gov.irs.deductions.standard.amount.SINGLE": {
+        "2025-01-01.2100-12-31": 31_500
+    },
+    "gov.irs.deductions.standard.amount.JOINT": {
+        "2025-01-01.2100-12-31": 63_000
+    },
+    ...
+}, country_id="us")
+
+baseline = Microsimulation(dataset="hf://policyengine/test/NC.h5")
+reform = Microsimulation(
+    dataset="hf://policyengine/test/NC.h5",
+    reform=double_standard_deduction,
+)
+\end{verbatim}
+\end{frame}
+
+\begin{frame}[fragile]{Example: Computing Reform Impact}
+\small
+\begin{verbatim}
+
+print("Baseline income tax:", baseline.calculate("income_tax", 2025).sum() / 1E9 )
+# Baseline income tax: 30.244186651078152
+print("Reform income tax:", reform.calculate("income_tax", 2025).sum() / 1E9)
+# Reform income tax: 20.983373598848175
+
+df = reform.calculate_dataframe([
+    "household_id", "household_weight", "congressional_district_geoid",
+    "income_tax"
+])
+df.loc[df.income_tax > 0].sample(3)
+
+#      household_id  household_weight  congressional_district_geoid    income_tax
+#3124       2080524         46.448639                          3703   3903.695557
+#2567       2071429        209.020447                          3702  16684.183594
+#7655       2121120        211.719910                          3707  15872.220703
+\end{verbatim}
 \end{frame}
 
 \section{Data and Methodology}
@@ -166,9 +219,9 @@ $$\text{Cov}(I^{\text{CPS}}, X^{\text{CPS}}) \neq \text{Cov}(I^{\text{true}}, X^
     \node[draw, fill=taxblue!30, rounded corners, minimum width=2.2cm, minimum height=0.9cm, align=center]
         (final) at (16.5,0.75) {\small $\mathcal{M}_t$\\[-3pt]\tiny Final};
 
-    \draw[->, thick] (puft) -- (reweight);
-    \draw[->, thick] (cpst) -- (reweight);
-    \draw[->, thick] (reweight) -- (final);
+    \draw[<-, thick] (puft) -- (reweight);
+    \draw[<-, thick] (cpst) -- (reweight);
+    \draw[<-, thick] (reweight) -- (final);
 \end{tikzpicture}
 \end{center}
 
@@ -207,7 +260,7 @@ $$\mathcal{M}_t = \text{Reweight}(\mathcal{A}_t^{\text{PUF}} \cup \mathcal{A}_t^
 
 \begin{columns}
 \begin{column}{0.55\textwidth}
-  \textbf{Choose w with Help From the Matrix Equation:}
+  \textbf{Use PyTorch to Approximately Solve:}
 
 \vspace{0.2cm}
 $$\mathbf{t} = \mathbf{X}\mathbf{w}$$
@@ -216,7 +269,7 @@ $$\mathbf{t} = \mathbf{X}\mathbf{w}$$
 \begin{itemize}
     \item $\mathbf{t}$: Calibration targets
     \item $\mathbf{X}$: Household characteristics matrix
-    \item $\mathbf{w}$: Household weights)
+    \item $\mathbf{w}$: Household weights
 \end{itemize}
 
 \vspace{0.3cm}
@@ -248,7 +301,7 @@ $$\mathbf{t} = \mathbf{X}\mathbf{w}$$
     \node[align=center] at (1.25,3.25) {\small PUF\\[-2pt]\small dominates};
 
     \node[right, align=left] at (2.1,0.75) {\footnotesize Rich demographics};
-    \node[right, align=left] at (2.1,3.25) {\footnotesize Clean upper tail};
+    \node[right, align=left] at (2.1,3.25) {\footnotesize Realistic upper tail};
 \end{tikzpicture}
 
 \end{column}
@@ -328,12 +381,12 @@ TX\_age\_10\_15 & \cellcolor{gray!30}0 & \cellcolor{gray!30}0 & \cellcolor{gray!
 
 \end{frame}
 
-\begin{frame}{Optional: Enforce Sparsity in Household Weights}
+\begin{frame}{Regularized, Sparse Household Weights via PyTorch}
 \begin{itemize}
-  \item For 10k households by 436 congressional districts is 4.6 million pseudo-households \& weights
-  \item For a policy simulator under computational load, it's desireable to have fewer
-  \item LASSO will overregularize (push down) wieghts that we want to be large
-  \item PolicyEngine has L0- and L2-regularized calibrator based on Louizos et al. 2017
+  \item 10k households by 436 congressional districts is 4.6 million pseudo-household
+  \item For a policy simulator, it's desireable to have fewer households (i.e., non-zero weights)
+  \item Custom PyTorch implementation of L0- and L2-regularization (Louizos et al. 2017)
+  \item Does \textit{not} minimize distance to original weights like typical calibration methods.
 \end{itemize}
 
 \begin{columns}
@@ -377,11 +430,9 @@ Adjustable \% of weights driven to zero
 
 \vspace{1cm}
 \normalsize
-Questions and Discussion
 
 \vspace{0.5cm}
 Ben.Ogorek@PolicyEngine.org
-@BenOgorek on X
 
 \vspace{0.5cm}
 \textbf{Resources:}\\
@@ -389,11 +440,6 @@ Ben.Ogorek@PolicyEngine.org
 \url{https://github.com/PolicyEngine/policyengine-us-data} \\
 \url{https://huggingface.co/policyengine/policyengine-us-data}
 \end{center}
-\end{frame}
-
-\begin{frame}[allowframebreaks]{References}
-  TODO
-\bibliography{references}
 \end{frame}
 
 \end{document}
